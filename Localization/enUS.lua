@@ -1,0 +1,40 @@
+-- Master phrase list. Every phrase the code looks up in L must be listed here
+-- (spec/locale_spec.lua checks).
+local L = NodeLedger.L
+
+L["%d here |cff999999/ %d all|r"] = true
+L["%d times, seen %s ago"] = true
+L["%s: %d here, %d total"] = true
+L["Average haul"] = true
+L["Commands:"] = true
+L["Debug off."] = true
+L["Debug on."] = true
+L["Fishing pool"] = true
+L["Forgot %s."] = true
+L["Gathered"] = true
+L["Herb"] = true
+L["Hiding %s."] = true
+L["Merge radius %d yards."] = true
+L["Mining node"] = true
+L["Money"] = true
+L["No hauls recorded yet"] = true
+L["No map position here."] = true
+L["No node within 30 yards."] = true
+L["Node Ledger"] = true
+L["Removed every node on this map."] = true
+L["Ring size %d."] = true
+L["Showing %s."] = true
+L["Spawns as:"] = true
+L["Treasure"] = true
+L["Type /nodes wipemap confirm to remove every node on this map."] = true
+L["World map rings off."] = true
+L["World map rings on."] = true
+L["here / all, chance"] = true
+L["how close two sightings must be to count as one node"] = true
+L["minimap ring size"] = true
+L["node counts, here and everywhere"] = true
+L["remove every node on this map"] = true
+L["remove the nearest node within 30 yards"] = true
+L["show or hide a kind of node"] = true
+L["show or hide world map rings"] = true
+L["toggle debug messages"] = true

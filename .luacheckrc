@@ -1,0 +1,32 @@
+std = "lua51"
+max_line_length = false
+exclude_files = {
+    "spec/**",
+    ".luacheckrc"
+}
+ignore = {
+    "212" -- unused argument (event handlers take what they're given)
+}
+globals = {
+    "NodeLedger",
+    "NodeLedgerDB",
+    "NodeLedgerWorldMapPinMixin",
+    "SLASH_NODELEDGER1",
+    "SLASH_NODELEDGER2",
+    "SlashCmdList"
+}
+read_globals = {
+    -- Lua / WoW Lua extensions
+    "issecretvalue",
+    -- Namespaces and mixins
+    "C_AddOns", "C_CVar", "C_EventUtils", "C_Item", "C_Map", "C_Spell", "C_Timer", "C_VignetteInfo", "Enum",
+    "CreateFromMixins", "CreateVector2D", "MapCanvasDataProviderMixin", "MapCanvasPinMixin",
+    -- Functions
+    "CreateFrame", "GetAddOnMetadata", "GetBuildInfo", "GetCVar", "GetCursorPosition", "GetItemInfo",
+    "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo", "GetMinimapShape", "GetMoney",
+    "GetMoneyString", "GetNumLootItems", "GetPlayerFacing", "GetServerTime", "GetSpellInfo", "GetTime",
+    "IsFishingLoot", "IsInInstance", "IsIndoors", "UnitExists",
+    -- Frames
+    "GameTooltip", "GameTooltipTextLeft1", "Minimap", "UIParent", "WorldMapFrame"
+}
+files["Localization/*.lua"] = {ignore = {"211"}}

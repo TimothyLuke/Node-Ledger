@@ -1,0 +1,24 @@
+## Interface: 16001, 120105, 120107
+
+## Title: |cffc8a050Node Ledger|r
+## Notes: Remembers every mining, herb, fishing and treasure node you gather or hover on the minimap, rings them on the minimap and world map, and shows what each spawn point spawns as and its average haul.
+## Author: TimothyLuke
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Pick_02
+## SavedVariables: NodeLedgerDB
+
+Core\Init.lua
+Localization\enUS.lua
+
+Core\Util.lua
+Core\Store.lua
+Core\Names.lua
+Core\Geo.lua
+Core\Tooltip.lua
+Core\Detect.lua
+Core\Minimap.lua
+Core\WorldMap.lua
+Core\WorldMap.xml
+Core\Commands.lua
+
+Core\Events.lua

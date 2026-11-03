@@ -1,0 +1,104 @@
+local NL = NodeLedger
+local L = NL.L
+local Util = NL.Util
+local Store = NL.Store
+local Geo = NL.Geo
+
+NL.Commands = {}
+local Commands = NL.Commands
+
+-- /nodes forget removes the nearest node within this many yards of you.
+local FORGET_YARDS = 30
+
+local KIND_ALIASES = {
+    mine = "mine", mining = "mine", ore = "mine",
+    herb = "herb", herbs = "herb", herbalism = "herb",
+    fish = "fish", fishing = "fish", pool = "fish", pools = "fish",
+    treasure = "treasure", chest = "treasure", chests = "treasure"
+}
+
+local function help()
+    Util.Print(L["Commands:"])
+    print("  /nodes stats - " .. L["node counts, here and everywhere"])
+    print("  /nodes toggle <mine|herb|fish|treasure> - " .. L["show or hide a kind of node"])
+    print("  /nodes size <pixels> - " .. L["minimap ring size"])
+    print("  /nodes merge <yards> - " .. L["how close two sightings must be to count as one node"])
+    print("  /nodes worldmap - " .. L["show or hide world map rings"])
+    print("  /nodes forget - " .. L["remove the nearest node within 30 yards"])
+    print("  /nodes wipemap confirm - " .. L["remove every node on this map"])
+    print("  /nodes debug - " .. L["toggle debug messages"])
+end
+
+local function stats()
+    local mapID = Geo.PlayerPosition()
+    local total, here = Store.Counts(mapID)
+    for _, kind in ipairs(NL.Kinds) do
+        Util.Print(string.format(L["%s: %d here, %d total"], kind, here[kind] or 0, total[kind] or 0))
+    end
+end
+
+local function forget()
+    local mapID, x, y, w, h = Geo.PlayerPosition()
+    if not mapID then
+        Util.Print(L["No map position here."])
+        return
+    end
+    local node = Store.FindNear(mapID, x, y, nil, FORGET_YARDS, w, h)
+    if not node then
+        Util.Print(L["No node within 30 yards."])
+        return
+    end
+    Store.Remove(mapID, node.id)
+    Util.Print(string.format(L["Forgot %s."], node.lastName or node.kind))
+    NL.Changed()
+end
+
+function Commands.Run(input)
+    local command, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    command = command:lower()
+    local options = Store.Options()
+    if command == "stats" then
+        stats()
+    elseif command == "toggle" then
+        local kind = KIND_ALIASES[rest:lower()]
+        if not kind then
+            help()
+            return
+        end
+        options.show[kind] = not options.show[kind]
+        Util.Print(string.format(options.show[kind] and L["Showing %s."] or L["Hiding %s."], kind))
+        NL.Changed()
+    elseif command == "size" and tonumber(rest) then
+        options.ringSize = math.max(6, math.min(48, tonumber(rest)))
+        Util.Print(string.format(L["Ring size %d."], options.ringSize))
+    elseif command == "merge" and tonumber(rest) then
+        options.mergeRadius = math.max(3, math.min(60, tonumber(rest)))
+        Util.Print(string.format(L["Merge radius %d yards."], options.mergeRadius))
+    elseif command == "worldmap" then
+        options.worldMap = not options.worldMap
+        Util.Print(options.worldMap and L["World map rings on."] or L["World map rings off."])
+        NL.Changed()
+    elseif command == "forget" then
+        forget()
+    elseif command == "wipemap" then
+        local mapID = Geo.PlayerPosition()
+        if rest:lower() ~= "confirm" or not mapID then
+            Util.Print(L["Type /nodes wipemap confirm to remove every node on this map."])
+            return
+        end
+        Store.WipeMap(mapID)
+        Util.Print(L["Removed every node on this map."])
+        NL.Changed()
+    elseif command == "debug" then
+        options.debug = not options.debug
+        Util.Print(options.debug and L["Debug on."] or L["Debug off."])
+    else
+        help()
+    end
+end
+
+function Commands.Register()
+    SLASH_NODELEDGER1 = "/nodes"
+    SLASH_NODELEDGER2 = "/nodeledger"
+    SlashCmdList.NODELEDGER = Commands.Run
+end

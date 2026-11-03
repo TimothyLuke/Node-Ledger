@@ -1,0 +1,22 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\FrameXML\UI.xsd">
+    <Frame name="NodeLedgerWorldMapPinTemplate" mixin="NodeLedgerWorldMapPinMixin" enableMouse="true" virtual="true">
+        <Size x="14" y="14"/>
+        <Layers>
+            <Layer level="OVERLAY">
+                <Texture parentKey="Ring" file="Interface\AddOns\node-ledger\Media\Ring" setAllPoints="true"/>
+                <Texture parentKey="Variant" file="Interface\AddOns\node-ledger\Media\Ring" hidden="true">
+                    <Size x="8" y="8"/>
+                    <Anchors>
+                        <Anchor point="CENTER"/>
+                    </Anchors>
+                </Texture>
+            </Layer>
+        </Layers>
+        <Scripts>
+            <OnLoad method="OnLoad"/>
+            <OnEnter method="OnMouseEnter"/>
+            <OnLeave method="OnMouseLeave"/>
+        </Scripts>
+    </Frame>
+</Ui>

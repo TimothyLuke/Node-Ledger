@@ -1,0 +1,10 @@
+package-as: node-ledger
+
+# No libraries: events, tooltips, map pins and timers are all native.
+enable-nolib-creation: no
+
+ignore:
+  - README.md
+  - spec
+  - .luacheckrc
+  - .busted
