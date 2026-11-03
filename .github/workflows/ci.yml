@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "*"
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Queue rather than cancel: a half-finished publish is worse than a late one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1.5"
+
+      - name: Luacheck
+        uses: nebularg/actions-luacheck@v1
+        with:
+          args: -q
+
+      - uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install busted
+        run: luarocks install busted
+
+      - name: Unit tests
+        run: busted -o utfTerminal
+
+      # Everything below builds and publishes; pull requests stop at the tests.
+
+      - name: Package
+        uses: BigWigsMods/packager@master
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same idea as GSE's patreonBuild.js: post the zip the packager just left
+      # in .release/ to the build channel. The webhook URL lives only in the
+      # DISCORD_WEBHOOK repo secret.
+      - name: Post build to Discord
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          ADDON_NAME: Node Ledger
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "::error::DISCORD_WEBHOOK secret is not set"
+            exit 1
+          fi
+          zip=$(ls -t .release/*.zip | head -n 1)
+          if [ -z "$zip" ]; then
+            echo "::error::No zip found in .release/"
+            exit 1
+          fi
+          name=$(basename "$zip")
+          subject=$(git log -1 --pretty=%s)
+          jq -n \
+            --arg addon "$ADDON_NAME" \
+            --arg file "$name" \
+            --arg subject "$subject" \
+            --arg commit "$COMMIT_URL" \
+            --arg repo "$REPO_URL" \
+            '{username: ($addon + " Build Bot"),
+              embeds: [{
+                author: {name: ($addon + " Updater"), url: $repo},
+                title: ("New " + $addon + " build"),
+                url: $commit,
+                description: $subject,
+                fields: [{name: "Package", value: $file, inline: true}],
+                color: 45300,
+                timestamp: (now | todate)
+              }]}' > "$RUNNER_TEMP/payload.json"
+          curl -sS --fail-with-body \
+            -F "payload_json=<$RUNNER_TEMP/payload.json" \
+            -F "files[0]=@$zip;filename=$name" \
+            "$DISCORD_WEBHOOK"
+          echo "Posted $name to Discord"
