@@ -61,8 +61,18 @@ function Util.Print(message)
     print(PREFIX .. tostring(message))
 end
 
+-- Debug lines are also kept in the saved variables, for reading after a /reload.
+local DEBUG_LOG_LINES = 200
+
 function Util.Debug(message)
     if NodeLedgerDB and NodeLedgerDB.options and NodeLedgerDB.options.debug then
-        print(PREFIX .. "|cff888888" .. tostring(message) .. "|r")
+        message = tostring(message)
+        print(PREFIX .. "|cff888888" .. message .. "|r")
+        local log = NodeLedgerDB.debugLog or {}
+        NodeLedgerDB.debugLog = log
+        log[#log + 1] = date("%H:%M:%S ") .. message
+        if #log > DEBUG_LOG_LINES then
+            table.remove(log, 1)
+        end
     end
 end

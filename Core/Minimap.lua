@@ -23,8 +23,14 @@ local UPDATE_INTERVAL = 0.05
 local HOVER_INTERVAL = 0.1
 -- How close (pixels) the cursor must be to a ring to show its node.
 local HOVER_PIXELS = 8
--- A blip is ~12px across, so a hover lands up to this many pixels from the node.
-local HOVER_ERROR_PIXELS = 6
+-- A hover is recorded where the cursor is, not at the blip's centre, so it
+-- lands up to half a blip from the node. Retail's gathering blips are about
+-- 24px across, twice the old minimap's.
+local HOVER_ERROR_PIXELS = 12
+-- The cursor counts as resting on a blip once it has moved no more than this
+-- many pixels per frame for this long.
+local HOVER_STILL_PIXELS = 1
+local HOVER_SETTLE_SECONDS = 0.15
 -- Rings past the minimap's edge by up to this factor of its radius are
 -- considered before the exact circle/square test.
 local SQUARE_REACH = 1.42
@@ -37,6 +43,12 @@ local lastBlipText
 -- blip tooltip already has our lines, and which node our own tooltip shows.
 local annotated = false
 local ownNode
+-- Retail builds the blip tooltip itself every frame; see onMinimapMouseover.
+-- It may not when there's no blip under the cursor, so once it goes quiet the
+-- polling below shows bare rings itself.
+local mouseoverHooked = false
+local lastMouseoverTime = 0
+local MOUSEOVER_QUIET_SECONDS = 0.2
 
 local function acquirePin(i)
     local pin = pins[i]
@@ -130,11 +142,25 @@ local function recordBlips(text, cx, cy)
     local mapID, px, py, w, h = Geo.PlayerPosition()
     local rotation, ok = Geo.MinimapRotation()
     if not mapID or not ok then
+        Util.Debug(
+            string.format(
+                "Blip skipped: %s, rotation known %s",
+                mapID and "position ok" or Geo.WhyNoPosition(), tostring(ok)
+            )
+        )
         return
     end
     local ypp = Geo.MinimapYardsPerPixel()
     local east, south = Geo.FromMinimap(cx, cy, ypp, rotation)
     local x, y = px + east / w, py + south / h
+    Util.Debug(
+        string.format(
+            "Hover cursor %.1f,%.1f size %.1fx%.1f scale %.3f ypp %.3f viewRadius %s zoom %d shape %s rotate %s -> %.1f yd E, %.1f yd S",
+            cx, cy, Minimap:GetWidth(), Minimap:GetHeight(), Minimap:GetEffectiveScale(), ypp,
+            tostring(C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius()), Minimap:GetZoom(),
+            tostring(GetMinimapShape and GetMinimapShape()), tostring(rotation), east, south
+        )
+    )
     -- Zoomed out a hover is coarse: widen the merge and trust it less.
     local errorYards = HOVER_ERROR_PIXELS * ypp
     local weight = math.min(1, 5 / errorYards)
@@ -143,8 +169,9 @@ local function recordBlips(text, cx, cy)
         local name = Util.StripCodes(line)
         local kind = Names.KindOf(name)
         if kind then
+            -- Two hovers of one blip can land on opposite edges of it.
             local _, isNew, fresh =
-                Store.Observe(mapID, x, y, kind, name, "minimap", w, h, Util.Now(), nil, errorYards, weight)
+                Store.Observe(mapID, x, y, kind, name, "minimap", w, h, Util.Now(), nil, 2 * errorYards, weight)
             if fresh then
                 NL.Share.Queue({mapID = mapID, x = x, y = y, kind = kind, source = "minimap", name = name})
             end
@@ -152,6 +179,8 @@ local function recordBlips(text, cx, cy)
                 Util.Debug(string.format("New %s from minimap: %s", kind, name))
             end
             changed = changed or isNew
+        elseif name ~= "" then
+            Util.Debug("Unrecognised minimap blip: " .. name)
         end
     end
     if changed then
@@ -168,14 +197,91 @@ local function hideOwnTip()
     end
 end
 
+-- Retail shows a blip's tooltip as soon as the cursor reaches the edge of its
+-- hover area, so where the cursor is when it appears is the edge it came in
+-- from. The blip is where the cursor comes to rest; failing that, the middle
+-- of everywhere it went while the tooltip was up.
+local hover -- {text, sumX, sumY, n, x, y, stillSince, done}
+
+local function commitHover(x, y)
+    if not hover or hover.done then
+        return
+    end
+    hover.done = true
+    local ok, err = pcall(recordBlips, hover.text, x, y)
+    if not ok then
+        Util.Debug("Blip error: " .. tostring(err))
+    end
+    updateRings()
+end
+
+--- The hover ended without the cursor settling: use the middle of its path.
+local function endHover()
+    if hover and not hover.done then
+        commitHover(hover.sumX / hover.n, hover.sumY / hover.n)
+    end
+    hover = nil
+end
+
+local function trackHover(text, cx, cy)
+    if not hover or hover.text ~= text then
+        endHover()
+        Util.Debug("Blip: " .. text:gsub("\n", " / "))
+        hover = {text = text, sumX = cx, sumY = cy, n = 1, x = cx, y = cy}
+        return
+    end
+    hover.sumX, hover.sumY, hover.n = hover.sumX + cx, hover.sumY + cy, hover.n + 1
+    local moved = math.abs(cx - hover.x) + math.abs(cy - hover.y)
+    hover.x, hover.y = cx, cy
+    if moved > HOVER_STILL_PIXELS then
+        hover.stillSince = nil
+    elseif not hover.stillSince then
+        hover.stillSince = GetTime()
+    elseif GetTime() - hover.stillSince >= HOVER_SETTLE_SECONDS then
+        commitHover(cx, cy)
+    end
+end
+
+--- Retail's minimap rebuilds GameTooltip every frame it's hovered, owned by
+-- UIParent, via SetMinimapMouseover. That wipes anything shown a frame
+-- earlier, so the blip is read and our lines added right after each rebuild.
+local function onMinimapMouseover(tooltip)
+    if not Minimap:IsMouseOver() then
+        return
+    end
+    lastMouseoverTime = GetTime()
+    ownTip = false
+    local cx, cy = Geo.CursorOnMinimap()
+    local text = tooltip:NumLines() > 0 and GameTooltipTextLeft1 and GameTooltipTextLeft1:GetText()
+    if text and IsSecret(text) then
+        return
+    end
+    if text and text ~= "" then
+        trackHover(text, cx, cy)
+    else
+        endHover()
+        text = nil
+    end
+    -- No blip here: a ring for a node that isn't up right now.
+    local node = nodeUnderCursor(cx, cy)
+    if node then
+        NL.Tooltip.AddNodeLines(tooltip, node, not text)
+        tooltip:Show()
+    end
+end
+
 local function updateHover()
     if not Minimap:IsVisible() or not Minimap:IsMouseOver() then
         lastBlipText = nil
+        endHover()
         hideOwnTip()
         return
     end
+    if mouseoverHooked and GetTime() - lastMouseoverTime < MOUSEOVER_QUIET_SECONDS then
+        return
+    end
     local cx, cy = Geo.CursorOnMinimap()
-    local owned = GameTooltip:IsShown() and GameTooltip:GetOwner() == Minimap
+    local owned = not mouseoverHooked and GameTooltip:IsShown() and GameTooltip:GetOwner() == Minimap
 
     if owned and not ownNode then
         -- The client's blip tooltip.
@@ -226,6 +332,10 @@ function MM.Init()
             ownNode = nil
         end
     )
+    if GameTooltip.SetMinimapMouseover then
+        hooksecurefunc(GameTooltip, "SetMinimapMouseover", onMinimapMouseover)
+        mouseoverHooked = true
+    end
     local ringElapsed, hoverElapsed = 0, 0
     local driver = CreateFrame("Frame")
     driver:SetScript(

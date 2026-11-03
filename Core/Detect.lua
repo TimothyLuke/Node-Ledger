@@ -19,6 +19,8 @@ local WORLD_TIP_SECONDS = 30
 local BOBBER_OBJECT_ID = 35591
 -- A bobber lands about this far in front of you, so that's where the pool is.
 local CAST_DISTANCE = 17
+-- A node you can mouse over in the world is usually within this many yards.
+local WORLD_HOVER_YARDS = 40
 -- Coins arrive a moment after the loot window closes.
 local MONEY_DELAY = 0.5
 local VIGNETTE_DELAY = 0.5
@@ -60,10 +62,68 @@ end
 
 -- World object tooltips ----------------------------------------------------------
 
+local function mouseOverWorld()
+    local focus
+    if GetMouseFoci then
+        focus = GetMouseFoci()[1]
+    elseif GetMouseFocus then
+        focus = GetMouseFocus()
+    end
+    return focus == WorldFrame
+end
+
+--- The game won't say where a hovered object is, only that you can see it,
+-- so it's recorded at your feet as a rough sighting for better sources to
+-- correct. Not shared: it's too coarse to be worth anyone else's ring.
+local function recordWorldHover(name, objectID)
+    local kind = Store.ObjectKind(objectID) or Names.KindOf(name)
+    if not kind then
+        Util.Debug(string.format("World hover: %s (object %s) isn't a node", name, tostring(objectID)))
+        return
+    end
+    local mapID, x, y, w, h = Geo.PlayerPosition()
+    if not mapID then
+        Util.Debug("World hover skipped: " .. Geo.WhyNoPosition())
+        return
+    end
+    local _, isNew =
+        Store.Observe(mapID, x, y, kind, name, "world", w, h, Util.Now(), objectID, WORLD_HOVER_YARDS)
+    Util.Debug(string.format("%s %s from world hover: %s", isNew and "New" or "Seen", kind, name))
+    if isNew then
+        NL.Changed()
+    end
+end
+
+--- Retail fills world object tooltips through the tooltip data system, which
+-- names the object and gives its GUID, so no guessing from the tooltip owner.
+local function onTooltipData(tooltip, data)
+    if tooltip ~= GameTooltip or not data or data.type ~= Enum.TooltipDataType.Object then
+        return
+    end
+    if Minimap:IsMouseOver() then
+        return
+    end
+    local line = data.lines and data.lines[1]
+    local text = line and line.leftText
+    if not text or IsSecret(text) or text == "" then
+        return
+    end
+    local name = Util.StripCodes(text)
+    local guid = data.guid
+    local objectID = guid and not IsSecret(guid) and Util.ObjectIDFromGUID(guid) or nil
+    -- The tooltip is refreshed while it stays up; that's still the one hover.
+    local again = worldTip and worldTip.name == name and GetTime() - worldTip.t < WORLD_TIP_SECONDS
+    worldTip = {name = name, t = GetTime()}
+    if not again then
+        recordWorldHover(name, objectID)
+    end
+end
+
 --- A tooltip on the default anchor with no unit behind it is a world object
 -- under the cursor: remember its name.
 local function onTooltipShow(tooltip)
-    if tooltip:GetOwner() ~= UIParent or UnitExists("mouseover") then
+    -- Retail's minimap blip tooltip is owned by UIParent too.
+    if tooltip:GetOwner() ~= UIParent or UnitExists("mouseover") or Minimap:IsMouseOver() then
         return
     end
     local line = _G[tooltip:GetName() .. "TextLeft1"]
@@ -71,7 +131,12 @@ local function onTooltipShow(tooltip)
     if not text or IsSecret(text) then
         return
     end
-    worldTip = {name = Util.StripCodes(text), t = GetTime()}
+    local name = Util.StripCodes(text)
+    worldTip = {name = name, t = GetTime()}
+    -- Recording needs more certainty than naming the next loot does.
+    if mouseOverWorld() then
+        recordWorldHover(name)
+    end
 end
 
 -- Loot ---------------------------------------------------------------------------
@@ -144,13 +209,21 @@ function Detect.OnLootReady()
     lootHandled = true
     local objectID = lootObjectID()
     local fishing = IsFishingLoot and IsFishingLoot()
+    local castKind = cast and cast.kind
     local kind, name = classify(objectID, fishing)
     cast = nil
+    Util.Debug(
+        string.format(
+            "Loot: object %s, cast %s, fishing %s -> %s %s",
+            tostring(objectID), tostring(castKind), tostring(fishing), tostring(kind), tostring(name)
+        )
+    )
     if not kind then
         return
     end
     local mapID, x, y, w, h = Geo.PlayerPosition()
     if not mapID then
+        Util.Debug("Loot skipped: " .. Geo.WhyNoPosition())
         return
     end
     if kind == "fish" then
@@ -178,7 +251,9 @@ function Detect.OnLootReady()
     }
     NL.Share.Queue(entry)
     moneyPending = {node = node, name = name, money = GetMoney(), entry = entry}
-    Util.Debug(string.format("%s %s: %s", isNew and "New" or "Gathered", kind, name or "?"))
+    Util.Debug(
+        string.format("%s %s: %s at %.4f,%.4f (map %d)", isNew and "New" or "Gathered", kind, name or "?", x, y, mapID)
+    )
     NL.Changed()
 end
 
@@ -269,5 +344,9 @@ function Detect.QueueVignetteScan()
 end
 
 function Detect.Init()
-    GameTooltip:HookScript("OnShow", onTooltipShow)
+    if TooltipDataProcessor and Enum.TooltipDataType and Enum.TooltipDataType.Object then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Object, onTooltipData)
+    else
+        GameTooltip:HookScript("OnShow", onTooltipShow)
+    end
 end

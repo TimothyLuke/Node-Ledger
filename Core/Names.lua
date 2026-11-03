@@ -25,11 +25,36 @@ seed(
         "Gromsblood", "Golden Sansam", "Dreamfoil", "Mountain Silversage", "Plaguebloom", "Icecap", "Black Lotus",
         "Bloodthistle", "Felweed", "Dreaming Glory", "Ragveil", "Terocone", "Flame Cap", "Netherbloom",
         "Nightmare Vine", "Mana Thistle", "Goldclover", "Tiger Lily", "Talandra's Rose", "Adder's Tongue",
-        "Lichbloom", "Icethorn", "Frost Lotus", "Mycobloom", "Luredrop", "Orbinid", "Blessing Blossom",
-        "Arathor's Spear"
+        "Lichbloom", "Icethorn", "Frost Lotus", "Deadnettle", "Fire Leaf",
+        -- Cataclysm
+        "Cinderbloom", "Stormvine", "Azshara's Veil", "Heartblossom", "Whiptail", "Twilight Jasmine",
+        -- Mists of Pandaria
+        "Green Tea Leaf", "Silkweed", "Rain Poppy", "Snow Lily", "Fool's Cap", "Golden Lotus",
+        -- Warlords of Draenor
+        "Frostweed", "Fireweed", "Gorgrond Flytrap", "Starflower", "Nagrand Arrowbloom", "Talador Orchid",
+        -- Legion
+        "Aethril", "Dreamleaf", "Foxflower", "Fjarnskaggl", "Starlight Rose", "Astral Glory",
+        -- Battle for Azeroth
+        "Riverbud", "Star Moss", "Akunda's Bite", "Winter's Kiss", "Siren's Pollen", "Sea Stalk", "Anchor Weed",
+        "Zin'anthid",
+        -- Shadowlands
+        "Death Blossom", "Rising Glory", "Marrowroot", "Vigil's Torch", "Widowbloom", "Nightshade", "First Flower",
+        -- Dragonflight
+        "Hochenblume", "Bubble Poppy", "Saxifrage", "Writhebark",
+        -- The War Within
+        "Mycobloom", "Luredrop", "Orbinid", "Blessing Blossom", "Arathor's Spear",
+        -- Midnight
+        "Tranquility Bloom", "Sanguithorn", "Azeroot", "Argentleaf", "Mana Lily"
     }
 )
-seed("mine", {"Bismuth", "Aqirite", "Ironclaw Seam", "Serevite Deposit", "Draconium Deposit", "Khaz'gorite Deposit"})
+seed(
+    "mine",
+    {
+        "Bismuth", "Aqirite", "Ironclaw Seam", "Serevite Deposit", "Draconium Deposit", "Khaz'gorite Deposit",
+        -- Midnight
+        "Refulgent Copper", "Umbral Tin", "Brilliant Silver"
+    }
+)
 
 -- Lowercase Lua patterns, tried in order.
 local PATTERNS = {

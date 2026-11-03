@@ -62,6 +62,32 @@ function Geo.PlayerPosition()
     return mapID, x, y, w, h
 end
 
+--- Which step of PlayerPosition fails right now, for debug output.
+function Geo.WhyNoPosition()
+    if IsInInstance() then
+        return "in an instance"
+    end
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then
+        return "no map for player"
+    end
+    if IsSecret(mapID) then
+        return "map ID is secret"
+    end
+    local pos = C_Map.GetPlayerMapPosition(mapID, "player")
+    if not pos then
+        return "no position on map " .. mapID
+    end
+    local x, y = pos:GetXY()
+    if IsSecret(x) or IsSecret(y) then
+        return "position is secret on map " .. mapID
+    end
+    if not Geo.MapSize(mapID) then
+        return "no world size for map " .. mapID
+    end
+    return string.format("position %.4f,%.4f on map %d looks fine", x, y, mapID)
+end
+
 --- Radians, 0 north, counter-clockwise; nil if unknown.
 function Geo.Facing()
     local facing = GetPlayerFacing and GetPlayerFacing()
@@ -76,11 +102,16 @@ function Geo.Ahead(x, y, w, h, facing, yards)
     return x - math.sin(facing) * yards / w, y - math.cos(facing) * yards / h
 end
 
--- Minimap diameter in yards per zoom level (the values HereBeDragons uses).
+-- Minimap diameter in yards per zoom level, for clients that can't tell us
+-- (the values HereBeDragons falls back to). Retail's minimap doesn't match them.
 local OUTDOOR = {[0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 3, 200, 133 + 1 / 3}
 local INDOOR = {[0] = 300, 240, 180, 120, 80, 50}
 
 function Geo.MinimapYardsPerPixel()
+    local radius = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius()
+    if radius and not IsSecret(radius) and radius > 0 then
+        return 2 * radius / Minimap:GetWidth()
+    end
     local zoom = Minimap:GetZoom()
     local diameter = (IsIndoors() and INDOOR or OUTDOOR)[zoom] or OUTDOOR[0]
     return diameter / Minimap:GetWidth()

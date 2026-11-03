@@ -9,6 +9,9 @@ local NL = NodeLedger
 --                 Mithril point that sometimes spawns Truesilver shows both
 --   hauls[name]   {visits, money, items[itemID] = {qty, hits}} per spawn name
 --   gathered, sightings, first, lastObserved, lastName, objects[objectID]
+--   precision     how it was placed: PRECISION of its best source so far
+--   reach         yards; set while the node is only known from hovers, so
+--                 anything that close may be it
 --   shared        how many observations came from the guild or friends
 NL.Store = {}
 local Store = NL.Store
@@ -20,8 +23,15 @@ local DB_VERSION = 1
 -- doesn't inflate its counts.
 local RESPAWN_SECONDS = 300
 -- Position weights. A gather puts you within a few yards of the node, a
--- vignette is exact, a minimap hover is only as good as the zoom level.
-local SOURCE_WEIGHT = {gather = 3, vignette = 5, minimap = 1}
+-- vignette is exact, a minimap hover is only as good as the zoom level, and a
+-- world hover only says the node is somewhere you can see from where you stand.
+local SOURCE_WEIGHT = {gather = 3, vignette = 5, minimap = 1, world = 0.25}
+-- Hovers only say roughly where a node is. A node keeps the position of its
+-- most precise source: a better one replaces it, a worse one never moves it.
+local PRECISION = {world = 1, minimap = 2, gather = 3, vignette = 3}
+local EXACT = 3
+-- When a gather absorbs hovers: how far from the node you stand to gather it.
+local GATHER_SLACK = 8
 -- Capped so an old node still settles toward newer, better observations.
 local MAX_WEIGHT = 20
 
@@ -85,7 +95,7 @@ function Store.FindNear(mapID, x, y, kind, radius, w, h)
     for _, node in pairs(nodes) do
         if kind == nil or node.kind == kind then
             local d = Store.Distance(node.x, node.y, x, y, w, h)
-            if d <= radius and (not bestDist or d < bestDist) then
+            if d <= math.max(radius, node.reach or 0) and (not bestDist or d < bestDist) then
                 best, bestDist = node, d
             end
         end
@@ -117,10 +127,28 @@ function Store.ItemName(itemID)
     return NodeLedgerDB.itemNames[itemID]
 end
 
+--- Folds hovered-only nodes of `node`'s kind that could have been `node`
+-- into it, so repeated rough hovers of one spawn don't outlive its gather.
+-- A gather is a few yards off the node itself, which widens the reach.
+local function absorbHovers(mapID, node, w, h)
+    for id, other in pairs(NodeLedgerDB.maps[mapID]) do
+        if other ~= node and other.kind == node.kind and other.reach then
+            if Store.Distance(other.x, other.y, node.x, node.y, w, h) <= other.reach + GATHER_SLACK then
+                for name, count in pairs(other.names) do
+                    node.names[name] = math.max(node.names[name] or 0, count)
+                end
+                node.sightings = math.max(node.sightings, other.sightings or 0)
+                node.first = math.min(node.first or other.first, other.first or node.first)
+                NodeLedgerDB.maps[mapID][id] = nil
+            end
+        end
+    end
+end
+
 --- Records that a `kind` node called `name` was at x,y. Merges into the
 -- nearest node of that kind within the merge radius (or `radius` when the
 -- observation is coarser than that), otherwise starts a new node.
--- `source` is "gather", "minimap" or "vignette"; `weight` overrides its
+-- `source` is "gather", "minimap", "vignette" or "world"; `weight` overrides its
 -- default. Returns the node, whether it is new, and whether this was a new
 -- spawn rather than the same one seen again (what's worth sharing).
 function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, radius, weight)
@@ -128,6 +156,17 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
     radius = math.max(radius or 0, db.options.mergeRadius)
     local node = Store.FindNear(mapID, x, y, kind, radius, w, h)
     local isNew = node == nil
+    local precision = PRECISION[source] or EXACT
+    local reach = precision < EXACT and radius or nil
+    if node then
+        local had = node.precision or EXACT
+        if precision > had then
+            node.x, node.y, node.w = x, y, 0
+            node.precision, node.reach = precision, reach
+        elseif precision == had and reach then
+            node.reach = math.max(node.reach or 0, reach)
+        end
+    end
     if isNew then
         node = {
             id = db.nextID,
@@ -139,7 +178,9 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
             hauls = {},
             gathered = 0,
             sightings = 0,
-            first = now
+            first = now,
+            precision = precision,
+            reach = reach
         }
         db.nextID = db.nextID + 1
         db.maps[mapID] = db.maps[mapID] or {}
@@ -153,7 +194,7 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
         isNew or (name and name ~= node.lastName) or now - (node.lastObserved or 0) > RESPAWN_SECONDS
     local gather = source == "gather"
 
-    if fresh or gather then
+    if (fresh or gather) and precision >= (node.precision or EXACT) then
         weight = weight or SOURCE_WEIGHT[source] or 1
         local total = node.w + weight
         node.x = (node.x * node.w + x * weight) / total
@@ -177,6 +218,9 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
         node.objects = node.objects or {}
         node.objects[objectID] = true
         db.objectKinds[objectID] = kind
+    end
+    if precision == EXACT then
+        absorbHovers(mapID, node, w, h)
     end
     return node, isNew, fresh or false
 end
