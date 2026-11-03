@@ -26,6 +26,8 @@ local function help()
     print("  /nodes worldmap - " .. L["show or hide world map rings"])
     print("  /nodes forget - " .. L["remove the nearest node within 30 yards"])
     print("  /nodes wipemap confirm - " .. L["remove every node on this map"])
+    print("  /nodes share - " .. L["show what is shared"])
+    print("  /nodes share <on|off|guild|friends|receive> - " .. L["turn sharing on or off, or toggle one part"])
     print("  /nodes debug - " .. L["toggle debug messages"])
 end
 
@@ -35,6 +37,33 @@ local function stats()
     for _, kind in ipairs(NL.Kinds) do
         Util.Print(string.format(L["%s: %d here, %d total"], kind, here[kind] or 0, total[kind] or 0))
     end
+end
+
+local function onOff(value)
+    return value and L["on"] or L["off"]
+end
+
+local function share(arg)
+    local opts = Store.Options().share
+    arg = arg:lower()
+    if arg == "on" or arg == "off" then
+        opts.send = arg == "on"
+        opts.receive = opts.send
+    elseif arg == "guild" or arg == "friends" or arg == "receive" then
+        opts[arg] = not opts[arg]
+    elseif arg ~= "" then
+        help()
+        return
+    end
+    Util.Print(
+        string.format(
+            L["Sharing: send %s (guild %s, friends %s), receive %s."],
+            onOff(opts.send),
+            onOff(opts.guild),
+            onOff(opts.friends),
+            onOff(opts.receive)
+        )
+    )
 end
 
 local function forget()
@@ -89,6 +118,8 @@ function Commands.Run(input)
         Store.WipeMap(mapID)
         Util.Print(L["Removed every node on this map."])
         NL.Changed()
+    elseif command == "share" then
+        share(rest)
     elseif command == "debug" then
         options.debug = not options.debug
         Util.Print(options.debug and L["Debug on."] or L["Debug off."])

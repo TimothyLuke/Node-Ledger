@@ -25,6 +25,19 @@ Every sighting within the merge radius (15 yards by default) of a node of the sa
 point. Its position is a weighted average of every sighting, with gathers and vignettes weighted above
 hovers.
 
+## Sharing with your guild and friends
+
+Everything you find is shared, and so is everything they find:
+
+- **Guild**: sent on the guild addon channel.
+- **Friends**: whispered to online character friends who aren't in your guild, and sent over Battle.net to
+  Battle.net friends playing the same game.
+
+Finds are sent in batches every 10 seconds, at most one message a second. Gathers carry their haul, so
+your friends' averages include yours. Received finds are merged like your own, never passed on, and only
+taken from the guild channel and people on your friends lists, rate-limited per sender. Retail and Forever
+don't mix, because their map IDs mean different places.
+
 ## Tooltips
 
 Hover a ring (on the minimap or world map) or a minimap blip to see:
@@ -44,6 +57,10 @@ Hover a ring (on the minimap or world map) or a minimap blip to see:
 /nodes worldmap                 show or hide world map rings
 /nodes forget                   remove the nearest node within 30 yards
 /nodes wipemap confirm          remove every node on this map
+/nodes share                    show what is shared
+/nodes share on|off             turn sharing (send and receive) on or off
+/nodes share guild|friends      toggle sending to the guild or friends
+/nodes share receive            toggle taking others' finds
 /nodes debug                    toggle debug messages
 ```
 

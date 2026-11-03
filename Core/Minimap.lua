@@ -143,8 +143,11 @@ local function recordBlips(text, cx, cy)
         local name = Util.StripCodes(line)
         local kind = Names.KindOf(name)
         if kind then
-            local _, isNew =
+            local _, isNew, fresh =
                 Store.Observe(mapID, x, y, kind, name, "minimap", w, h, Util.Now(), nil, errorYards, weight)
+            if fresh then
+                NL.Share.Queue({mapID = mapID, x = x, y = y, kind = kind, source = "minimap", name = name})
+            end
             if isNew then
                 Util.Debug(string.format("New %s from minimap: %s", kind, name))
             end

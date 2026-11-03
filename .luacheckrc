@@ -17,15 +17,19 @@ globals = {
 }
 read_globals = {
     -- Lua / WoW Lua extensions
-    "issecretvalue",
+    "issecretvalue", "wipe",
     -- Namespaces and mixins
-    "C_AddOns", "C_CVar", "C_EventUtils", "C_Item", "C_Map", "C_Spell", "C_Timer", "C_VignetteInfo", "Enum",
+    "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_FriendList", "C_GuildInfo", "C_CVar", "C_EventUtils", "C_Item", "C_Map", "C_Spell", "C_Timer", "C_VignetteInfo", "Enum",
     "CreateFromMixins", "CreateVector2D", "MapCanvasDataProviderMixin", "MapCanvasPinMixin",
     -- Functions
+    "Ambiguate", "BNGetNumFriends", "BNSendGameData", "GetGuildRosterInfo", "GetNumGuildMembers", "IsInGuild",
+    "UnitName",
     "CreateFrame", "GetAddOnMetadata", "GetBuildInfo", "GetCVar", "GetCursorPosition", "GetItemInfo",
     "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo", "GetMinimapShape", "GetMoney",
     "GetMoneyString", "GetNumLootItems", "GetPlayerFacing", "GetServerTime", "GetSpellInfo", "GetTime",
     "IsFishingLoot", "IsInInstance", "IsIndoors", "UnitExists",
+    -- Constants
+    "BNET_CLIENT_WOW", "WOW_PROJECT_ID",
     -- Frames
     "GameTooltip", "GameTooltipTextLeft1", "Minimap", "UIParent", "WorldMapFrame"
 }

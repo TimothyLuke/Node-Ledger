@@ -12,6 +12,7 @@ function NL:OnEnable()
     Detect.Init()
     NL.Minimap.Init()
     NL.WorldMap.Init()
+    NL.Share.Init()
 
     self:RegisterEvent("UNIT_SPELLCAST_SENT", Detect.OnSpellcastSent)
     self:RegisterEvent("UNIT_SPELLCAST_FAILED", Detect.OnSpellcastFailed)
@@ -27,4 +28,8 @@ function NL:OnEnable()
     self:RegisterEventIfExists("VIGNETTE_MINIMAP_UPDATED", Detect.QueueVignetteScan)
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Detect.QueueVignetteScan)
     Detect.QueueVignetteScan()
+
+    self:RegisterEvent("CHAT_MSG_ADDON", NL.Share.OnAddonMessage)
+    self:RegisterEventIfExists("BN_CHAT_MSG_ADDON", NL.Share.OnBNAddonMessage)
+    self:RegisterEvent("GUILD_ROSTER_UPDATE", NL.Share.OnGuildRoster)
 end

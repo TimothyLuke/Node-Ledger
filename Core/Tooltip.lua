@@ -111,6 +111,10 @@ function Tooltip.AddNodeLines(tooltip, node, withTitle)
         1
     )
 
+    if node.shared then
+        tooltip:AddDoubleLine(L["Shared with you"], string.format(L["%d times"], node.shared), 0.8, 0.8, 0.8, 1, 1, 1)
+    end
+
     local anyHaul = false
     for _, entry in ipairs(names) do
         local haul, all = node.hauls[entry.name], Store.NameHaul(entry.name)

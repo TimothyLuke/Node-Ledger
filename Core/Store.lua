@@ -9,6 +9,7 @@ local NL = NodeLedger
 --                 Mithril point that sometimes spawns Truesilver shows both
 --   hauls[name]   {visits, money, items[itemID] = {qty, hits}} per spawn name
 --   gathered, sightings, first, lastObserved, lastName, objects[objectID]
+--   shared        how many observations came from the guild or friends
 NL.Store = {}
 local Store = NL.Store
 
@@ -29,6 +30,8 @@ local DEFAULT_OPTIONS = {
     ringSize = 18,
     mergeRadius = 15,
     worldMap = true,
+    -- Send our finds to the guild and online friends, and take theirs.
+    share = {send = true, receive = true, guild = true, friends = true},
     debug = false
 }
 
@@ -118,7 +121,8 @@ end
 -- nearest node of that kind within the merge radius (or `radius` when the
 -- observation is coarser than that), otherwise starts a new node.
 -- `source` is "gather", "minimap" or "vignette"; `weight` overrides its
--- default. Returns the node and whether it is new.
+-- default. Returns the node, whether it is new, and whether this was a new
+-- spawn rather than the same one seen again (what's worth sharing).
 function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, radius, weight)
     local db = NodeLedgerDB
     radius = math.max(radius or 0, db.options.mergeRadius)
@@ -174,7 +178,7 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
         node.objects[objectID] = true
         db.objectKinds[objectID] = kind
     end
-    return node, isNew
+    return node, isNew, fresh or false
 end
 
 local function newHaul()

@@ -164,8 +164,20 @@ function Detect.OnLootReady()
     end
     local node, isNew = Store.Observe(mapID, x, y, kind, name, "gather", w, h, Util.Now(), objectID)
     name = name or node.lastName
-    Store.AddHaul(node, name, readLoot())
-    moneyPending = {node = node, name = name, money = GetMoney()}
+    local items = readLoot()
+    Store.AddHaul(node, name, items)
+    local entry = {
+        mapID = mapID,
+        x = x,
+        y = y,
+        kind = kind,
+        source = "gather",
+        name = name,
+        objectID = objectID,
+        items = items
+    }
+    NL.Share.Queue(entry)
+    moneyPending = {node = node, name = name, money = GetMoney(), entry = entry}
     Util.Debug(string.format("%s %s: %s", isNew and "New" or "Gathered", kind, name or "?"))
     NL.Changed()
 end
@@ -183,6 +195,8 @@ function Detect.OnLootClosed()
             local gained = GetMoney() - pending.money
             if gained > 0 then
                 Store.AddMoney(pending.node, pending.name, gained)
+                -- Still queued: the share flush is well after this.
+                pending.entry.money = gained
             end
         end
     )
@@ -221,7 +235,21 @@ function Detect.ScanVignettes()
                     if not IsSecret(x) and not IsSecret(info.name) then
                         seenVignettes[guid] = true
                         local objectID = not IsSecret(info.objectGUID) and Util.ObjectIDFromGUID(info.objectGUID) or nil
-                        Store.Observe(mapID, x, y, "treasure", info.name, "vignette", w, h, Util.Now(), objectID)
+                        local _, _, fresh =
+                            Store.Observe(mapID, x, y, "treasure", info.name, "vignette", w, h, Util.Now(), objectID)
+                        if fresh then
+                            NL.Share.Queue(
+                                {
+                                    mapID = mapID,
+                                    x = x,
+                                    y = y,
+                                    kind = "treasure",
+                                    source = "vignette",
+                                    name = info.name,
+                                    objectID = objectID
+                                }
+                            )
+                        end
                         changed = true
                     end
                 end

@@ -16,7 +16,7 @@ function helper.load()
                 end})
     }
     _G.NodeLedgerDB = nil
-    for _, f in ipairs({"Store", "Names"}) do
+    for _, f in ipairs({"Store", "Names", "Codec"}) do
         dofile("Core/" .. f .. ".lua")
     end
     NodeLedger.Store.Init()
