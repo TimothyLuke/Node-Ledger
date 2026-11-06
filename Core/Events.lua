@@ -5,6 +5,7 @@ local Detect = NL.Detect
 function NL:OnInitialize()
     Store.Init()
     NL.Commands.Register()
+    NL.Options.Register()
 end
 
 function NL:OnEnable()
@@ -26,7 +27,14 @@ function NL:OnEnable()
 
     self:RegisterEventIfExists("VIGNETTES_UPDATED", Detect.QueueVignetteScan)
     self:RegisterEventIfExists("VIGNETTE_MINIMAP_UPDATED", Detect.QueueVignetteScan)
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Detect.QueueVignetteScan)
+    -- One handler per event, so the zone change does both jobs.
+    self:RegisterEvent(
+        "ZONE_CHANGED_NEW_AREA",
+        function()
+            Detect.QueueVignetteScan()
+            NL.Share.OnZoneChanged()
+        end
+    )
     Detect.QueueVignetteScan()
 
     self:RegisterEvent("CHAT_MSG_ADDON", NL.Share.OnAddonMessage)

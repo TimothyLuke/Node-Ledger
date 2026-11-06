@@ -22,5 +22,6 @@ Core\Minimap.lua
 Core\WorldMap.lua
 Core\WorldMap.xml
 Core\Commands.lua
+Core\Options.lua
 
 Core\Events.lua

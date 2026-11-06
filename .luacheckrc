@@ -13,17 +13,19 @@ globals = {
     "NodeLedgerWorldMapPinMixin",
     "SLASH_NODELEDGER1",
     "SLASH_NODELEDGER2",
-    "SlashCmdList"
+    "SlashCmdList",
+    "StaticPopupDialogs"
 }
 read_globals = {
     -- Lua / WoW Lua extensions
     "issecretvalue", "wipe", "date",
     -- Namespaces and mixins
     "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_FriendList", "C_GuildInfo", "C_CVar", "C_EventUtils", "C_Item", "C_Map", "C_Minimap", "C_Spell", "C_Timer", "C_VignetteInfo", "Enum",
-    "CreateFromMixins", "TooltipDataProcessor", "CreateVector2D", "MapCanvasDataProviderMixin", "MapCanvasPinMixin",
+    "CreateFromMixins", "TooltipDataProcessor", "Settings", "CreateSettingsListSectionHeaderInitializer",
+    "CreateSettingsButtonInitializer", "MinimalSliderWithSteppersMixin", "StaticPopup_Show", "YES", "NO", "CreateVector2D", "MapCanvasDataProviderMixin", "MapCanvasPinMixin",
     -- Functions
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "GetGuildRosterInfo", "GetNumGuildMembers", "IsInGuild",
-    "UnitName",
+    "UnitName", "GetNormalizedRealmName",
     "CreateFrame", "GetAddOnMetadata", "GetBuildInfo", "GetCVar", "GetCursorPosition", "GetItemInfo",
     "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo", "GetMinimapShape", "GetMoney",
     "GetMoneyString", "GetNumLootItems", "GetPlayerFacing", "GetServerTime", "GetSpellInfo", "GetTime",

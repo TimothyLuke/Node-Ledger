@@ -15,8 +15,8 @@
         </Layers>
         <Scripts>
             <OnLoad method="OnLoad"/>
-            <OnEnter method="OnMouseEnter"/>
-            <OnLeave method="OnMouseLeave"/>
+            <!-- No OnEnter/OnLeave: the map canvas asserts they are unset and
+                 wires them to the mixin's OnMouseEnter/OnMouseLeave itself. -->
         </Scripts>
     </Frame>
 </Ui>

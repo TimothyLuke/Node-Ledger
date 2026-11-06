@@ -19,6 +19,7 @@ local KIND_ALIASES = {
 
 local function help()
     Util.Print(L["Commands:"])
+    print("  /nodes options - " .. L["open the options panel"])
     print("  /nodes stats - " .. L["node counts, here and everywhere"])
     print("  /nodes toggle <mine|herb|fish|treasure> - " .. L["show or hide a kind of node"])
     print("  /nodes size <pixels> - " .. L["minimap ring size"])
@@ -27,11 +28,12 @@ local function help()
     print("  /nodes forget - " .. L["remove the nearest node within 30 yards"])
     print("  /nodes wipemap confirm - " .. L["remove every node on this map"])
     print("  /nodes share - " .. L["show what is shared"])
-    print("  /nodes share <on|off|guild|friends|receive> - " .. L["turn sharing on or off, or toggle one part"])
+    print("  /nodes share <on|off|guild|friends|receive|catchup> - " .. L["turn sharing on or off, or toggle one part"])
+    print("  /nodes sync - " .. L["ask the guild for this map's nodes now"])
     print("  /nodes debug - " .. L["toggle debug messages"])
 end
 
-local function stats()
+function Commands.Stats()
     local mapID = Geo.PlayerPosition()
     local total, here = Store.Counts(mapID)
     for _, kind in ipairs(NL.Kinds) do
@@ -51,22 +53,34 @@ local function share(arg)
         opts.receive = opts.send
     elseif arg == "guild" or arg == "friends" or arg == "receive" then
         opts[arg] = not opts[arg]
+    elseif arg == "catchup" then
+        opts.catchUp = not opts.catchUp
     elseif arg ~= "" then
         help()
         return
     end
     Util.Print(
         string.format(
-            L["Sharing: send %s (guild %s, friends %s), receive %s."],
+            L["Sharing: send %s (guild %s, friends %s), receive %s, catch up %s."],
             onOff(opts.send),
             onOff(opts.guild),
             onOff(opts.friends),
-            onOff(opts.receive)
+            onOff(opts.receive),
+            onOff(opts.catchUp)
         )
     )
 end
 
-local function forget()
+--- Asks the guild for this map's nodes now, even if it was asked already.
+function Commands.Sync()
+    if NL.Share.RequestSync(true) then
+        Util.Print(L["Asked the guild for this map's nodes."])
+    else
+        Util.Print(L["Can't catch up here: needs a guild, a map position, and receiving and catch-up turned on."])
+    end
+end
+
+function Commands.Forget()
     local mapID, x, y, w, h = Geo.PlayerPosition()
     if not mapID then
         Util.Print(L["No map position here."])
@@ -82,12 +96,27 @@ local function forget()
     NL.Changed()
 end
 
+--- Removes every node on the player's current map; false if there's no map.
+function Commands.WipeMap()
+    local mapID = Geo.PlayerPosition()
+    if not mapID then
+        Util.Print(L["No map position here."])
+        return false
+    end
+    Store.WipeMap(mapID)
+    Util.Print(L["Removed every node on this map."])
+    NL.Changed()
+    return true
+end
+
 function Commands.Run(input)
     local command, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
     command = command:lower()
     local options = Store.Options()
     if command == "stats" then
-        stats()
+        Commands.Stats()
+    elseif command == "options" or command == "config" then
+        NL.Options.Open()
     elseif command == "toggle" then
         local kind = KIND_ALIASES[rest:lower()]
         if not kind then
@@ -108,18 +137,17 @@ function Commands.Run(input)
         Util.Print(options.worldMap and L["World map rings on."] or L["World map rings off."])
         NL.Changed()
     elseif command == "forget" then
-        forget()
+        Commands.Forget()
     elseif command == "wipemap" then
-        local mapID = Geo.PlayerPosition()
-        if rest:lower() ~= "confirm" or not mapID then
+        if rest:lower() ~= "confirm" then
             Util.Print(L["Type /nodes wipemap confirm to remove every node on this map."])
             return
         end
-        Store.WipeMap(mapID)
-        Util.Print(L["Removed every node on this map."])
-        NL.Changed()
+        Commands.WipeMap()
     elseif command == "share" then
         share(rest)
+    elseif command == "sync" then
+        Commands.Sync()
     elseif command == "debug" then
         options.debug = not options.debug
         Util.Print(options.debug and L["Debug on."] or L["Debug off."])

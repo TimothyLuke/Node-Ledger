@@ -83,6 +83,50 @@ describe("Codec", function()
     end)
 end)
 
+describe("Codec catch-up messages", function()
+    local Codec
+    before_each(function()
+        Codec = helper.load().Codec
+    end)
+
+    it("round-trips a query and an offer", function()
+        local q = Codec.DecodeControl(Codec.EncodeQuery("R", 2395, 12))
+        assert.are.same({flavor = "R", kind = "Q", mapID = 2395, count = 12}, q)
+        local o = Codec.DecodeControl(Codec.EncodeOffer("R", 2395, "Kerfinor-Frostmourne", 40))
+        assert.are.same({flavor = "R", kind = "O", mapID = 2395, count = 40, requester = "Kerfinor-Frostmourne"}, o)
+    end)
+
+    it("keeps control messages and node messages apart", function()
+        assert.is_nil(Codec.Decode(Codec.EncodeQuery("R", 1, 0)))
+        assert.is_nil(Codec.DecodeControl(Codec.EncodeBatch("R", {{mapID = 1, x = 0, y = 0, kind = "mine", source = "gather"}})[1]))
+    end)
+
+    it("rejects malformed control messages", function()
+        assert.is_nil(Codec.DecodeControl("S2;R;Q;1;1"))
+        assert.is_nil(Codec.DecodeControl("S1;R;Q;0;1"))
+        assert.is_nil(Codec.DecodeControl("S1;R;Q;1;-1"))
+        assert.is_nil(Codec.DecodeControl("S1;R;O;1;Bad|Name;1"))
+        assert.is_nil(Codec.DecodeControl("S1;R;X;1;1"))
+    end)
+
+    it("carries caught-up nodes as sync entries", function()
+        local e = {mapID = 2395, x = 0.5, y = 0.5, kind = "herb", source = "sync", name = "Tranquility Bloom", objectID = 516932}
+        local _, entries = Codec.Decode(Codec.EncodeBatch("R", {e})[1])
+        assert.are.equal("sync", entries[1].source)
+        assert.are.equal(516932, entries[1].objectID)
+    end)
+end)
+
+describe("Store.ExactNodes", function()
+    it("leaves out nodes only known from hovers", function()
+        local Store = helper.load().Store
+        Store.Observe(1, 0.1, 0.1, "mine", "Tin Vein", "gather", 1000, 1000, 1000)
+        Store.Observe(1, 0.9, 0.9, "mine", "Tin Vein", "minimap", 1000, 1000, 1000)
+        assert.are.equal(1, #Store.ExactNodes(1))
+        assert.are.equal(0, #Store.ExactNodes(2))
+    end)
+end)
+
 describe("Store.Observe freshness", function()
     it("reports a new spawn as fresh and a repeat sighting as not", function()
         local Store = helper.load().Store

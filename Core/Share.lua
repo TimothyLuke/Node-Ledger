@@ -15,6 +15,11 @@ local IsSecret = NL.Compat.IsSecret
 --
 -- Only the guild channel and people on our friends lists are listened to,
 -- and each sender is rate-limited.
+--
+-- Catching up: arriving on a map, we tell the guild how many nodes we have
+-- there. Guildmates with more wait a random moment, and the first to answer
+-- says so on the guild channel (the rest stand down) and whispers us its
+-- gathered nodes for that map, behind any live finds in the send queue.
 NL.Share = {}
 local Share = NL.Share
 
@@ -26,11 +31,24 @@ local FLUSH_SECONDS = 10
 local SEND_SECONDS = 1
 local MAX_OUTBOX = 100
 local RECEIVE_PER_MINUTE = 60
+-- Catching up.
+local SYNC_LOGIN_DELAY = 15
+local SYNC_ZONE_DELAY = 5
+local SYNC_ANSWER_MIN, SYNC_ANSWER_MAX = 2, 8
+-- Only answer when we have at least this many more nodes than the asker.
+local SYNC_MARGIN = 3
+local SYNC_MAX_NODES = 400
+local SYNC_RECEIVE_PER_MINUTE = 600
+-- Don't answer the same person about the same map again for this long.
+local SYNC_REPEAT_SECONDS = 300
 
 local pending = {}
 local outbox = {}
+local syncQueue = {}
 local guildNames = {}
 local senders = {}
+local asked = {}
+local answering = {}
 
 local THROTTLED = {}
 if Enum and Enum.SendAddonMessageResult then
@@ -49,6 +67,14 @@ end
 --- "Name" for our own realm, "Name-Realm" otherwise.
 local function shortName(name)
     return Ambiguate(name, "none")
+end
+
+--- "Name-Realm" always, so every guildmate names a player the same way.
+local function fullName(name)
+    if name:find("-", 1, true) then
+        return name
+    end
+    return name .. "-" .. (GetNormalizedRealmName() or "")
 end
 
 -- Sending ------------------------------------------------------------------------
@@ -136,7 +162,8 @@ local function flush()
 end
 
 local function sendNext()
-    local item = table.remove(outbox, 1)
+    -- Live finds first; a catch-up only uses the quiet seconds.
+    local item = table.remove(outbox, 1) or table.remove(syncQueue, 1)
     if not item then
         return
     end
@@ -157,10 +184,22 @@ local function allowance(sender)
     local now = GetTime()
     local s = senders[sender]
     if not s or now - s.t > 60 then
-        s = {t = now, n = 0}
+        s = {t = now, n = 0, sync = 0}
         senders[sender] = s
     end
     return s
+end
+
+--- A caught-up node only fills a gap: one we already know is left alone, so
+-- catching up never inflates what we've seen ourselves.
+local function applySync(e, w, h, now)
+    local radius = Store.Options().mergeRadius
+    if Store.FindNear(e.mapID, e.x, e.y, e.kind, radius, w, h) then
+        return false
+    end
+    local node = Store.Observe(e.mapID, e.x, e.y, e.kind, e.name, "sync", w, h, now, e.objectID)
+    node.shared = (node.shared or 0) + 1
+    return true
 end
 
 local function apply(sender, text)
@@ -175,12 +214,22 @@ local function apply(sender, text)
     local now = Util.Now()
     local added = 0
     for _, e in ipairs(entries) do
-        if budget.n >= RECEIVE_PER_MINUTE then
+        local sync = e.source == "sync"
+        local used = sync and budget.sync or budget.n
+        if used >= (sync and SYNC_RECEIVE_PER_MINUTE or RECEIVE_PER_MINUTE) then
             break
         end
-        budget.n = budget.n + 1
+        if sync then
+            budget.sync = used + 1
+        else
+            budget.n = used + 1
+        end
         local w, h = Geo.MapSize(e.mapID)
-        if w then
+        if w and sync then
+            if applySync(e, w, h, now) then
+                added = added + 1
+            end
+        elseif w then
             local node, isNew = Store.Observe(e.mapID, e.x, e.y, e.kind, e.name, e.source, w, h, now, e.objectID)
             node.shared = (node.shared or 0) + 1
             if e.source == "gather" then
@@ -209,11 +258,122 @@ local function isFriend(sender)
     return C_FriendList and C_FriendList.GetFriendInfo and C_FriendList.GetFriendInfo(shortName(sender)) ~= nil
 end
 
+-- Catching up ----------------------------------------------------------------------
+
+--- The entries to whisper someone catching up on `mapID`, most gathered first.
+local function syncEntries(mapID)
+    local nodes = Store.ExactNodes(mapID)
+    table.sort(
+        nodes,
+        function(a, b)
+            return a.gathered > b.gathered
+        end
+    )
+    local entries = {}
+    for i = 1, math.min(#nodes, SYNC_MAX_NODES) do
+        local node = nodes[i]
+        entries[i] = {
+            mapID = mapID,
+            x = node.x,
+            y = node.y,
+            kind = node.kind,
+            source = "sync",
+            name = node.lastName,
+            objectID = node.objects and next(node.objects) or nil
+        }
+    end
+    return entries
+end
+
+local function answer(state, requester, query)
+    if state.cancelled then
+        return
+    end
+    state.sent = true
+    local entries = syncEntries(query.mapID)
+    push({channel = "GUILD", text = Codec.EncodeOffer(FLAVOR, query.mapID, requester, #entries)})
+    for _, text in ipairs(Codec.EncodeBatch(FLAVOR, entries)) do
+        syncQueue[#syncQueue + 1] = {channel = "WHISPER", target = requester, text = text}
+    end
+    Util.Debug(string.format("Catching %s up on map %d: %d node(s)", requester, query.mapID, #entries))
+end
+
+local function onQuery(sender, query)
+    local opts = options()
+    -- One catch-up at a time is plenty for the send queue.
+    if not (opts.send and opts.guild) or #syncQueue > 0 then
+        return
+    end
+    local requester = fullName(sender)
+    local key = requester .. ":" .. query.mapID
+    if answering[key] then
+        return
+    end
+    if #Store.ExactNodes(query.mapID) < query.count + SYNC_MARGIN then
+        return
+    end
+    local state = {}
+    answering[key] = state
+    C_Timer.After(
+        SYNC_ANSWER_MIN + math.random() * (SYNC_ANSWER_MAX - SYNC_ANSWER_MIN),
+        function()
+            answer(state, requester, query)
+        end
+    )
+    C_Timer.After(
+        SYNC_REPEAT_SECONDS,
+        function()
+            answering[key] = nil
+        end
+    )
+end
+
+--- Someone else is answering: stand down if we were about to.
+local function onOffer(offer)
+    local state = answering[offer.requester .. ":" .. offer.mapID]
+    if state and not state.sent then
+        state.cancelled = true
+    end
+end
+
+--- Asks the guild for the nodes on the map we're on, once per map a session
+-- unless `force`.
+function Share.RequestSync(force)
+    local opts = options()
+    if not (opts.receive and opts.catchUp) or not IsInGuild() then
+        return false
+    end
+    local mapID = Geo.PlayerPosition()
+    if not mapID or (asked[mapID] and not force) then
+        return false
+    end
+    asked[mapID] = true
+    local count = #Store.ExactNodes(mapID)
+    push({channel = "GUILD", text = Codec.EncodeQuery(FLAVOR, mapID, count)})
+    Util.Debug(string.format("Asked the guild about map %d (we have %d)", mapID, count))
+    return true
+end
+
+function Share.OnZoneChanged()
+    C_Timer.After(SYNC_ZONE_DELAY, Share.RequestSync)
+end
+
 function Share.OnAddonMessage(_, prefix, text, channel, sender)
     if prefix ~= PREFIX or IsSecret(text) or IsSecret(sender) or not sender or isSelf(sender) then
         return
     end
-    if channel == "GUILD" or (channel == "WHISPER" and isFriend(sender)) then
+    if channel == "GUILD" then
+        local control = Codec.DecodeControl(text)
+        if control then
+            if control.flavor == FLAVOR and control.kind == "Q" then
+                onQuery(sender, control)
+            elseif control.flavor == FLAVOR and control.kind == "O" then
+                onOffer(control)
+            end
+            return
+        end
+        apply(sender, text)
+    elseif channel == "WHISPER" and (isFriend(sender) or guildNames[shortName(sender)]) then
         apply(sender, text)
     end
 end
@@ -246,4 +406,5 @@ function Share.Init()
     if IsInGuild() and C_GuildInfo and C_GuildInfo.GuildRoster then
         C_GuildInfo.GuildRoster()
     end
+    C_Timer.After(SYNC_LOGIN_DELAY, Share.RequestSync)
 end

@@ -16,7 +16,14 @@ function NodeLedgerWorldMapPinMixin:OnLoad()
     self:UseFrameLevelType("PIN_FRAME_LEVEL_AREA_POI")
     self:SetScalingLimits(1, 1.0, 1.4)
     self.Variant:SetVertexColor(NL.VariantColor[1], NL.VariantColor[2], NL.VariantColor[3])
+    -- Hover only: every click goes through to the map (right-click zooms out).
+    self:SetMouseClickEnabled(false)
 end
+
+-- The map calls this on every pin it acquires, and SetPassThroughButtons is
+-- blocked in combat for addon pins. With clicks off there is nothing to pass
+-- through, so skip it (as HereBeDragons-Pins does).
+function NodeLedgerWorldMapPinMixin:SetPassThroughButtons() end
 
 function NodeLedgerWorldMapPinMixin:OnAcquired(node)
     self.node = node

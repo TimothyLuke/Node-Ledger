@@ -28,7 +28,7 @@ local RESPAWN_SECONDS = 300
 local SOURCE_WEIGHT = {gather = 3, vignette = 5, minimap = 1, world = 0.25}
 -- Hovers only say roughly where a node is. A node keeps the position of its
 -- most precise source: a better one replaces it, a worse one never moves it.
-local PRECISION = {world = 1, minimap = 2, gather = 3, vignette = 3}
+local PRECISION = {world = 1, minimap = 2, gather = 3, vignette = 3, sync = 3}
 local EXACT = 3
 -- When a gather absorbs hovers: how far from the node you stand to gather it.
 local GATHER_SLACK = 8
@@ -41,7 +41,8 @@ local DEFAULT_OPTIONS = {
     mergeRadius = 15,
     worldMap = true,
     -- Send our finds to the guild and online friends, and take theirs.
-    share = {send = true, receive = true, guild = true, friends = true},
+    -- catchUp asks the guild for a map's nodes when we arrive on it.
+    share = {send = true, receive = true, guild = true, friends = true, catchUp = true},
     debug = false
 }
 
@@ -77,6 +78,18 @@ end
 
 function Store.Nodes(mapID)
     return NodeLedgerDB.maps[mapID]
+end
+
+--- The nodes on `mapID` placed by a gather, vignette or catch-up, not by a
+-- hover: the ones worth handing to someone catching up.
+function Store.ExactNodes(mapID)
+    local list = {}
+    for _, node in pairs(NodeLedgerDB.maps[mapID] or {}) do
+        if (node.precision or EXACT) == EXACT then
+            list[#list + 1] = node
+        end
+    end
+    return list
 end
 
 --- Yards between two points on a map `w` by `h` yards.

@@ -38,6 +38,16 @@ your friends' averages include yours. Received finds are merged like your own, n
 taken from the guild channel and people on your friends lists, rate-limited per sender. Retail and Forever
 don't mix, because their map IDs mean different places.
 
+### Catching up
+
+Live sharing only reaches whoever is online at the time, so a new install or someone who's been away
+would miss everything found before. To fill that gap, when you log in or arrive on a map, Node Ledger tells
+the guild how many nodes it has there. A guildmate with more waits a random 2–8 seconds; the first to
+answer tells the guild it's doing so (the rest stand down) and whispers you its gathered nodes for that
+map, up to 400, at one message a second behind any live finds. Caught-up nodes only fill gaps: a node you
+already have isn't touched. Nodes only seen by hovering aren't passed on, and each map is asked about once
+a session (`/nodes sync` asks again).
+
 ## Tooltips
 
 Hover a ring (on the minimap or world map) or a minimap blip to see:
@@ -49,7 +59,11 @@ Hover a ring (on the minimap or world map) or a minimap blip to see:
 
 ## Commands
 
+Everything below except `share` with no argument (which shows the current state) is also in
+Options > AddOns > Node Ledger.
+
 ```
+/nodes options                  open the options panel
 /nodes stats                    node counts, here and everywhere
 /nodes toggle <kind>            show or hide mine, herb, fish or treasure
 /nodes size <pixels>            minimap ring size
@@ -61,6 +75,8 @@ Hover a ring (on the minimap or world map) or a minimap blip to see:
 /nodes share on|off             turn sharing (send and receive) on or off
 /nodes share guild|friends      toggle sending to the guild or friends
 /nodes share receive            toggle taking others' finds
+/nodes share catchup            toggle asking the guild to catch you up on each map
+/nodes sync                     ask the guild for this map's nodes now
 /nodes debug                    toggle debug messages
 ```
 

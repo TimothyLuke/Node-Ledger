@@ -11,6 +11,12 @@ local NL = NodeLedger
 --
 -- Everything received comes from another player, so Decode checks every
 -- field and drops any entry that doesn't fit.
+--
+-- Catching up uses control messages on the same prefix, which version-1
+-- readers ignore because they don't start with a number:
+--   "S<version>;<flavor>;Q;<mapID>;<count>"            asking for a map
+--   "S<version>;<flavor>;O;<mapID>;<requester>;<count>" answering someone
+-- and the nodes themselves go as ordinary entries with source "sync".
 NL.Codec = {}
 local Codec = NL.Codec
 
@@ -19,7 +25,7 @@ Codec.VERSION = 1
 Codec.MAX_LENGTH = 255
 
 local KIND_CODES = {mine = "m", herb = "h", fish = "f", treasure = "t"}
-local SOURCE_CODES = {gather = "g", minimap = "m", vignette = "v"}
+local SOURCE_CODES = {gather = "g", minimap = "m", vignette = "v", sync = "s"}
 local KINDS, SOURCES = {}, {}
 for k, v in pairs(KIND_CODES) do
     KINDS[v] = k
@@ -175,4 +181,50 @@ function Codec.Decode(text)
         end
     end
     return flavor, entries
+end
+
+-- Catching up --------------------------------------------------------------------
+
+Codec.SYNC_VERSION = 1
+local MAX_COUNT = 100000
+local MAX_PLAYER = 64
+
+local function syncHeader(flavor, kind)
+    return "S" .. Codec.SYNC_VERSION .. ";" .. flavor .. ";" .. kind .. ";"
+end
+
+--- Asks for the nodes on `mapID`, saying how many we already have there.
+function Codec.EncodeQuery(flavor, mapID, count)
+    return syncHeader(flavor, "Q") .. mapID .. ";" .. count
+end
+
+--- Tells everyone we're answering `requester`'s query for `mapID`.
+function Codec.EncodeOffer(flavor, mapID, requester, count)
+    return syncHeader(flavor, "O") .. mapID .. ";" .. requester .. ";" .. count
+end
+
+--- {flavor, kind = "Q" | "O", mapID, count, requester} from a control
+-- message, or nil if it isn't one.
+function Codec.DecodeControl(text)
+    if type(text) ~= "string" or #text > Codec.MAX_LENGTH then
+        return nil
+    end
+    local version, flavor, kind, rest = text:match("^S(%d+);(%a);(%a);(.*)$")
+    if tonumber(version) ~= Codec.SYNC_VERSION then
+        return nil
+    end
+    if kind == "Q" then
+        local mapID, count = rest:match("^(%d+);(%d+)$")
+        mapID, count = int(mapID, 1, MAX_ID), int(count, 0, MAX_COUNT)
+        if mapID and count then
+            return {flavor = flavor, kind = kind, mapID = mapID, count = count}
+        end
+    elseif kind == "O" then
+        local mapID, requester, count = rest:match("^(%d+);([^;]+);(%d+)$")
+        mapID, count = int(mapID, 1, MAX_ID), int(count, 0, MAX_COUNT)
+        if mapID and count and #requester <= MAX_PLAYER and not requester:find("[|]") then
+            return {flavor = flavor, kind = kind, mapID = mapID, count = count, requester = requester}
+        end
+    end
+    return nil
 end
