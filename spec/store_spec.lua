@@ -55,9 +55,19 @@ describe("Store", function()
     end)
 
     it("pulls the position toward heavier observations", function()
+        -- Equally precise sources average, weighted: gather 3, vignette 5.
+        local node = observe(0.500, 0.5, "mine", "Tin Vein", "gather", 1000)
+        observe(0.508, 0.5, "mine", "Tin Vein", "vignette", 2000)
+        assert.is_true(node.x > 0.5045 and node.x < 0.508)
+    end)
+
+    it("lets a more precise source replace a hover's position", function()
         local node = observe(0.500, 0.5, "mine", "Tin Vein", "minimap", 1000)
         observe(0.508, 0.5, "mine", "Tin Vein", "gather", 2000)
-        assert.is_true(node.x > 0.505 and node.x < 0.508)
+        assert.are.equal(0.508, node.x)
+        -- ...and a later hover never drags it back.
+        observe(0.500, 0.5, "mine", "Tin Vein", "minimap", 3000)
+        assert.are.equal(0.508, node.x)
     end)
 
     it("averages hauls per node and across every node of a name", function()

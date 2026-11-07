@@ -22,8 +22,9 @@ it on the minimap and world map:
 - **Treasure vignettes** (Retail): recorded with their exact position as soon as they appear.
 
 Every sighting within the merge radius (15 yards by default) of a node of the same kind is the same spawn
-point. Its position is a weighted average of every sighting, with gathers and vignettes weighted above
-hovers.
+point. Its position comes from its most precise sightings: a gather or vignette replaces where hovers
+put it, and hovers never move it after that. Sightings of equal precision are averaged, vignettes weighted
+above gathers.
 
 ## Sharing with your guild and friends
 
