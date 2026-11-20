@@ -26,7 +26,7 @@ read_globals = {
     -- Functions
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "GetGuildRosterInfo", "GetNumGuildMembers", "IsInGuild",
     "UnitName", "GetNormalizedRealmName",
-    "CreateFrame", "GetAddOnMetadata", "GetBuildInfo", "GetCVar", "GetCursorPosition", "GetItemInfo",
+    "CreateFrame", "GetAddOnMetadata", "GetBuildInfo", "GetCVar", "GetCursorPosition", "GetItemInfo", "GetItemInfoInstant",
     "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo", "GetMinimapShape", "GetMoney",
     "GetMoneyString", "GetNumLootItems", "GetPlayerFacing", "GetServerTime", "GetSpellInfo", "GetTime",
     "IsFishingLoot", "IsInInstance", "IsIndoors", "UnitExists", "hooksecurefunc", "GetMouseFoci", "GetMouseFocus",

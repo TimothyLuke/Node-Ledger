@@ -224,7 +224,11 @@ local function apply(sender, text)
         else
             budget.n = used + 1
         end
-        local w, h = Geo.MapSize(e.mapID)
+        local w, h
+        -- Quest objects we've ruled out, from someone who hasn't yet.
+        if not (e.kind == "treasure" and Store.RuledOut(e.objectID, e.name)) then
+            w, h = Geo.MapSize(e.mapID)
+        end
         if w and sync then
             if applySync(e, w, h, now) then
                 added = added + 1

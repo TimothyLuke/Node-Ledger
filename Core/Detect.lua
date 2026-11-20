@@ -76,7 +76,10 @@ end
 -- so it's recorded at your feet as a rough sighting for better sources to
 -- correct. Not shared: it's too coarse to be worth anyone else's ring.
 local function recordWorldHover(name, objectID)
-    local kind = Store.ObjectKind(objectID) or Names.KindOf(name)
+    local kind = Store.ObjectKind(objectID)
+    if kind == nil then
+        kind = Names.KindOf(name)
+    end
     if not kind then
         Util.Debug(string.format("World hover: %s (object %s) isn't a node", name, tostring(objectID)))
         return
@@ -152,22 +155,53 @@ local function lootObjectID()
     return nil
 end
 
---- items[itemID] = quantity for what's in the loot window.
+local QUEST_ITEM_CLASS = (Enum and Enum.ItemClass and Enum.ItemClass.Questitem) or 12
+
+--- True for a quest item: the loot slot says so, or failing that (older
+-- clients don't) its item class does.
+local function isQuestItem(itemID, slotSaysQuest)
+    if slotSaysQuest == true then
+        return true
+    end
+    local getInfo = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not getInfo then
+        return false
+    end
+    local classID = select(6, getInfo(itemID))
+    return classID ~= nil and not IsSecret(classID) and classID == QUEST_ITEM_CLASS
+end
+
+--- items[itemID] = quantity for what's in the loot window, and whether it is
+-- nothing but quest items: what a quest object on the ground holds, which a
+-- treasure never does.
 local function readLoot()
     local items = {}
+    local any, questOnly = false, true
     for slot = 1, GetNumLootItems() do
+        any = true
         if GetLootSlotType(slot) == LOOT_SLOT_ITEM then
             local itemID = Util.ItemIDFromLink(GetLootSlotLink(slot))
-            local _, name, quantity = GetLootSlotInfo(slot)
+            local _, name, quantity, _, _, _, slotSaysQuest = GetLootSlotInfo(slot)
             if itemID and not IsSecret(itemID) then
                 items[itemID] = (items[itemID] or 0) + (quantity or 1)
                 if not IsSecret(name) then
                     Store.RememberItemName(itemID, name)
                 end
+                if IsSecret(slotSaysQuest) then
+                    slotSaysQuest = nil
+                end
+                if not isQuestItem(itemID, slotSaysQuest) then
+                    questOnly = false
+                end
+            else
+                questOnly = false
             end
+        else
+            -- Coins or currency.
+            questOnly = false
         end
     end
-    return items
+    return items, any and questOnly
 end
 
 --- kind, name for this loot, or nil when it isn't a node.
@@ -191,7 +225,12 @@ local function classify(objectID, fishing)
         return gather.kind, gather.name or tipName
     end
     local name = (gather and gather.name) or tipName
-    local kind = Store.ObjectKind(objectID) or Names.KindOf(name)
+    local kind = Store.ObjectKind(objectID)
+    if kind == false then
+        -- Ruled out: a quest object, say.
+        return nil
+    end
+    kind = kind or Names.KindOf(name)
     if kind == "herb" or kind == "mine" or kind == "treasure" then
         return kind, name
     end
@@ -221,6 +260,20 @@ function Detect.OnLootReady()
     if not kind then
         return
     end
+    local items, questOnly = readLoot()
+    if kind == "treasure" and questOnly then
+        local removed = Store.NotTreasure(objectID, name)
+        Util.Debug(
+            string.format(
+                "Quest object, not treasure: %s (object %s); removed %d node(s)",
+                tostring(name), tostring(objectID), removed
+            )
+        )
+        if removed > 0 then
+            NL.Changed()
+        end
+        return
+    end
     local mapID, x, y, w, h = Geo.PlayerPosition()
     if not mapID then
         Util.Debug("Loot skipped: " .. Geo.WhyNoPosition())
@@ -237,7 +290,6 @@ function Detect.OnLootReady()
     end
     local node, isNew = Store.Observe(mapID, x, y, kind, name, "gather", w, h, Util.Now(), objectID)
     name = name or node.lastName
-    local items = readLoot()
     Store.AddHaul(node, name, items)
     local entry = {
         mapID = mapID,

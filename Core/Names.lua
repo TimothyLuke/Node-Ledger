@@ -80,8 +80,12 @@ local PATTERNS = {
 }
 
 local function lookup(name)
-    local kind = Store.NameKind(name) or SEED[name]
-    if kind then
+    local kind = Store.NameKind(name)
+    if kind == nil then
+        kind = SEED[name]
+    end
+    -- false: ruled out as a node, so don't guess from its words either.
+    if kind ~= nil then
         return kind
     end
     local lower = name:lower()
@@ -103,8 +107,8 @@ function Names.KindOf(name)
     local rest = name
     while rest do
         local kind = lookup(rest)
-        if kind then
-            return kind
+        if kind ~= nil then
+            return kind or nil
         end
         rest = rest:match("^%S+%s+(.+)$")
     end

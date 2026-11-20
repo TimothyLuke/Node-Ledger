@@ -116,18 +116,28 @@ function Store.FindNear(mapID, x, y, kind, radius, w, h)
     return best, bestDist
 end
 
+--- Learns `name` as `kind`, unless it's been ruled out as a node.
 function Store.LearnName(name, kind)
-    if name and kind then
+    if name and kind and NodeLedgerDB.nameKinds[name] ~= false then
         NodeLedgerDB.nameKinds[name] = kind
     end
 end
 
+--- The learned kind of `name`: false when it's known not to be a node, nil
+-- when nothing has been learned.
 function Store.NameKind(name)
-    return name and NodeLedgerDB.nameKinds[name]
+    if name then
+        return NodeLedgerDB.nameKinds[name]
+    end
+    return nil
 end
 
+--- As NameKind, for an object ID.
 function Store.ObjectKind(objectID)
-    return objectID and NodeLedgerDB.objectKinds[objectID]
+    if objectID then
+        return NodeLedgerDB.objectKinds[objectID]
+    end
+    return nil
 end
 
 function Store.RememberItemName(itemID, name)
@@ -230,7 +240,9 @@ function Store.Observe(mapID, x, y, kind, name, source, w, h, now, objectID, rad
     if objectID then
         node.objects = node.objects or {}
         node.objects[objectID] = true
-        db.objectKinds[objectID] = kind
+        if db.objectKinds[objectID] ~= false then
+            db.objectKinds[objectID] = kind
+        end
     end
     if precision == EXACT then
         absorbHovers(mapID, node, w, h)
@@ -327,6 +339,39 @@ function Store.Remove(mapID, nodeID)
     if nodes then
         nodes[nodeID] = nil
     end
+end
+
+--- Remembers that `objectID` (and the name it goes by) isn't a treasure, such
+-- as a quest object picked up off the ground, and drops the treasure nodes
+-- it already made. Returns how many nodes went.
+function Store.NotTreasure(objectID, name)
+    local db = NodeLedgerDB
+    local removed = 0
+    if objectID then
+        db.objectKinds[objectID] = false
+        for _, nodes in pairs(db.maps) do
+            for id, node in pairs(nodes) do
+                if node.kind == "treasure" and node.objects and node.objects[objectID] then
+                    for nodeName in pairs(node.names) do
+                        if db.nameKinds[nodeName] == "treasure" then
+                            db.nameKinds[nodeName] = false
+                        end
+                    end
+                    nodes[id] = nil
+                    removed = removed + 1
+                end
+            end
+        end
+    end
+    if name and name ~= "" then
+        db.nameKinds[name] = false
+    end
+    return removed
+end
+
+--- True when `objectID` or `name` has been ruled out as a node.
+function Store.RuledOut(objectID, name)
+    return Store.ObjectKind(objectID) == false or Store.NameKind(name) == false
 end
 
 function Store.WipeMap(mapID)
